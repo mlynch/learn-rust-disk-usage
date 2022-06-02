@@ -1,6 +1,6 @@
-use std::fs::{File, self, ReadDir};
+use std::fs::{File, self, ReadDir, metadata};
 
-use crate::ctx::Context;
+use crate::{ctx::Context, utils::is_hidden};
 
 struct FileTreeNode<'a> {
     path: &'a str,
@@ -31,28 +31,47 @@ impl<'a> Analyzer<'a> {
     }
 
     pub fn analyze(&self, ctx: &'a Context) -> std::io::Result<()> {
-        self.read_dir(&self.tree)?;
+        self.read_dir(ctx, &self.tree)?;
 
         Ok(())
     }
 
-    fn read_dir(&self, node: &FileTreeNode) -> std::io::Result<()> {
+    fn read_dir(&self, ctx: &'a Context, node: &FileTreeNode) -> std::io::Result<()> {
+        {
+            let entries = &mut fs::read_dir(node.path)?;
+            println!("Reading {} entries for dir: {}", entries.count(), node.path);
+        }
+
         let entries = fs::read_dir(node.path)?;
 
         for entry in entries {
             let entry = entry?;
-            let path = entry.path();
-
+            let path = &entry.path();
 
             if path.is_dir() {
-                node.push_child(path.to_str().unwrap());
-                println!("{}", path.to_str().unwrap());
+                if !ctx.args.hidden && is_hidden(path) {
+                    println!("Skipping hidden dir");
+                    continue
+                }
+                let path_str = path.to_str().unwrap();
+                node.push_child(path_str);
+                println!("{}", path_str);
 
-                let node = FileTreeNode::new(path.to_str().unwrap());
-                self.read_dir(&node)?;
+                let node = FileTreeNode::new(path_str);
+                self.read_dir(ctx, &node)?;
             } else if path.is_file() {
-                node.push_child(path.to_str().unwrap());
-                println!("{}", path.to_str().unwrap());
+                if !ctx.args.hidden && is_hidden(path) {
+                    println!("Skipping hidden file");
+                    continue
+                }
+
+                let mut path_str: Option<&str> = Option::None;
+                {
+                    path_str = Some(path.to_str().unwrap().clone());
+                    node.push_child(path_str.unwrap());
+                }
+                let len = metadata(path)?.len();
+                println!("{} ({})", path_str.unwrap(), len);
             }
         }
 
