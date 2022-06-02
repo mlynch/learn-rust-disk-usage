@@ -50,7 +50,6 @@ impl<'a> Analyzer<'a> {
 
             if path.is_dir() {
                 if !ctx.args.hidden && is_hidden(path) {
-                    println!("Skipping hidden dir");
                     continue
                 }
                 let path_str = path.to_str().unwrap();
@@ -61,7 +60,6 @@ impl<'a> Analyzer<'a> {
                 self.read_dir(ctx, &node)?;
             } else if path.is_file() {
                 if !ctx.args.hidden && is_hidden(path) {
-                    println!("Skipping hidden file");
                     continue
                 }
 
