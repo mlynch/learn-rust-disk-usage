@@ -1,6 +1,6 @@
 use crate::cli;
 
-pub struct Context<'a> {
+pub struct Context {
     pub args: cli::Args,
-    pub root: &'a str
+    pub root: String
 }

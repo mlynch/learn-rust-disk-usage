@@ -11,22 +11,24 @@ fn main() {
 
     let home = dirs::home_dir().unwrap();
 
-    let mut root = "/";
+    let mut root = args.dir.clone();
 
     if args.home {
-        root = home.to_str().unwrap()
+        root = String::from(home.to_str().unwrap())
     }
 
     println!("Analyzing disk usage at {}", root);
 
     let ctx = Context {
         args,
-        root
+        root: root.clone()
     };
 
-    let analyzer = Analyzer::new(ctx.root);
+    let analyzer = Analyzer::new(ctx.root.clone());
 
     analyzer.analyze(&ctx).expect("Unable to read file or directory");
+
+    analyzer.print_report(&ctx);
 
     println!("Hello, world!");
 }

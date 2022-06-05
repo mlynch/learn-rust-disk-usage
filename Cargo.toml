@@ -8,3 +8,5 @@ edition = "2021"
 [dependencies]
 clap = { version = "3.1.18", features = ["derive"] }
 dirs = "4.0.0"
+mime_guess = "2.0.4"
+priority-queue = "1.2.2"
