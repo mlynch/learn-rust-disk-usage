@@ -1,5 +1,7 @@
 use priority_queue::PriorityQueue;
 
+use colored::*;
+
 use crate::utils::bytes_to_human;
 
 pub struct AnalyzerStats {
@@ -17,14 +19,12 @@ impl AnalyzerStats {
     }
 
     pub fn print_largest(&self) {
-        println!("Largest: {}", self.largest_files.len());
-
         let largest_files = self.largest_files.clone();
 
         let sorted = largest_files.into_sorted_iter();
 
-        for (path, len) in sorted.take(100) {
-            println!("{} ({})", path, bytes_to_human(len));
+        for (path, len) in sorted.take(10) {
+            println!("{} ({})", path.purple().bold(), bytes_to_human(len).bold());
         }
     }
 }

@@ -1,17 +1,28 @@
-use std::{fs::{File, self, ReadDir, metadata}, cell::{Cell, RefCell, Ref}, rc::Rc, borrow::{Borrow, BorrowMut}};
+use std::{
+    cell::{Cell, RefCell},
+    fs::{self, metadata},
+    rc::Rc,
+};
 
-use crate::{ctx::Context, utils::{is_hidden, bytes_to_human}, stats::AnalyzerStats};
+use crate::{
+    ctx::Context,
+    stats::AnalyzerStats,
+    utils::{bytes_to_human, is_hidden},
+};
+
+use colored::*;
 
 #[derive(Clone)]
 pub struct FileTreeNode {
     path: String,
-    is_file: bool,
+    pub is_file: bool,
     mime_type: String,
-    children: RefCell<Vec<FileTreeNode>>
+    pub len: u64,
+    children: RefCell<Vec<FileTreeNode>>,
 }
 
 impl FileTreeNode {
-    fn new(path: String, is_file: bool) -> FileTreeNode {
+    fn new(path: String, is_file: bool, len: u64) -> FileTreeNode {
         let mut mime_str = String::from("");
         if let Some(mime) = mime_guess::from_path(path.clone()).first() {
             mime_str = mime.to_string();
@@ -21,12 +32,13 @@ impl FileTreeNode {
             path: path,
             mime_type: mime_str,
             is_file,
-            children: RefCell::new(Vec::new())
+            len,
+            children: RefCell::new(Vec::new()),
         }
     }
 
     fn push_child(&self, path: &str, is_file: bool, len: u64) -> Box<FileTreeNode> {
-        let child = Box::new(FileTreeNode::new(String::from(path), is_file));
+        let child = Box::new(FileTreeNode::new(String::from(path), is_file, len));
 
         self.children.borrow_mut().push((*child.as_ref()).clone());
 
@@ -38,19 +50,18 @@ pub struct Analyzer {
     total_bytes: Cell<u64>,
     tree: Rc<FileTreeNode>,
     stats: RefCell<AnalyzerStats>,
-    files: RefCell<Vec<Box<FileTreeNode>>>
+    files: RefCell<Vec<Box<FileTreeNode>>>,
 }
 
 impl Analyzer {
     pub fn new(root: String) -> Analyzer {
-
         let stats = RefCell::new(AnalyzerStats::new());
 
         Analyzer {
-            tree: Rc::new(FileTreeNode::new(root, false)),
+            tree: Rc::new(FileTreeNode::new(root, false, 0)),
             stats,
             total_bytes: Cell::new(0),
-            files: RefCell::new(Vec::new())
+            files: RefCell::new(Vec::new()),
         }
     }
 
@@ -75,7 +86,7 @@ impl Analyzer {
 
             if path.is_dir() {
                 if !ctx.args.hidden && is_hidden(path) {
-                    continue
+                    continue;
                 }
                 let path_str = path.to_str().unwrap();
                 let new_child = node.push_child(path_str, true, 0);
@@ -84,20 +95,21 @@ impl Analyzer {
                 self.read_dir(ctx, &new_child)?;
             } else if path.is_file() {
                 if !ctx.args.hidden && is_hidden(path) {
-                    continue
+                    continue;
                 }
 
                 let len = metadata(path)?.len();
 
                 self.total_bytes.set(self.total_bytes.get() + len);
 
-                let mut path_str: Option<&str> = Option::None;
                 {
-                    path_str = Some(path.to_str().unwrap().clone());
+                    let path_str = Some(path.to_str().unwrap().clone());
                     let new_child = node.push_child(path_str.unwrap(), true, len);
                     self.files.borrow_mut().push(new_child);
+                    self.stats
+                        .borrow_mut()
+                        .register_file(path_str.unwrap(), len);
                 }
-                self.stats.borrow_mut().register_file(path_str.unwrap(), len);
             }
         }
 
@@ -107,7 +119,11 @@ impl Analyzer {
     pub fn get_by_type(&self, mime_type: &str) -> Vec<Box<FileTreeNode>> {
         let files = self.files.borrow();
 
-        let filtered: Vec<Box<FileTreeNode>> = files.iter().filter(|n| n.mime_type == mime_type).map(|n| n.clone()).collect();
+        let filtered: Vec<Box<FileTreeNode>> = files
+            .iter()
+            .filter(|n| n.mime_type.contains(mime_type))
+            .map(|n| n.clone())
+            .collect();
 
         return filtered;
 
@@ -138,14 +154,21 @@ impl Analyzer {
     }
     */
 
-    pub fn print_report(&self, ctx: &Context) {
-        println!("Got largest files: ");
+    pub fn print_report(&self, _ctx: &Context) {
+        println!("{}", "Usage Report".bold().green());
 
+        let print_type = |mime: &str| {
+            let files = self.get_by_type(mime);
+            println!("Total {}: {} ({})", mime, files.len(), bytes_to_human(files.iter().map(|f| f.len).sum::<u64>()));
+        };
+
+
+        print_type("image/");
+        print_type("video/");
+        print_type("application/zip");
+
+        println!("{}", "Top files:".bold());
         self.stats.borrow().print_largest();
-
-        let images = self.get_by_type("image/png");
-
-        println!("Total pngs: {}", images.len());
 
         println!("Total: {}", bytes_to_human(self.total_bytes.get()));
         println!("Total files: {}", self.files.borrow().len());

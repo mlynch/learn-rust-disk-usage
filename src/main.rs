@@ -30,6 +30,4 @@ fn main() {
     analyzer.analyze(&ctx).expect("Unable to read file or directory");
 
     analyzer.print_report(&ctx);
-
-    println!("Hello, world!");
 }
