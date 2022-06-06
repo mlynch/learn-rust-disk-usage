@@ -96,6 +96,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "dirs",
+ "human_bytes",
  "mime_guess",
  "priority-queue",
 ]
@@ -131,6 +132,12 @@ checksum = "62b467343b94ba476dcb2500d242dadbb39557df889310ac77c5d99100aaac33"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "human_bytes"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88a0d4dc39ec942e44c1c306aa196da67f2bd6a30dc7b4a475465c13ccf28817"
 
 [[package]]
 name = "indexmap"

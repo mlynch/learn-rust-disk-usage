@@ -4,6 +4,7 @@ mod ctx;
 mod cli;
 mod analyzer;
 mod utils;
+mod stats;
 
 
 fn main() {

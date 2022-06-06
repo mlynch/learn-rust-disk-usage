@@ -6,6 +6,9 @@ pub struct Args {
     #[clap(short, long, default_value = "/")]
     pub dir: String,
 
+    #[clap(short, long, default_value = "")]
+    pub ignore: String,
+
     #[clap(long)]
     pub home: bool,
 
