@@ -12,25 +12,30 @@ use crate::{
 
 use colored::*;
 
+// use sysinfo::{ System };
+use sysinfo::{DiskExt, System, SystemExt};
+
 #[derive(Clone)]
 pub struct FileTreeNode {
     path: String,
     pub is_file: bool,
-    mime_type: String,
+    // mime_type: String,
     pub len: u64,
     children: RefCell<Vec<FileTreeNode>>,
 }
 
 impl FileTreeNode {
     fn new(path: String, is_file: bool, len: u64) -> FileTreeNode {
+        /*
         let mut mime_str = String::from("");
         if let Some(mime) = mime_guess::from_path(path.clone()).first() {
             mime_str = mime.to_string();
         };
+        */
 
         FileTreeNode {
             path: path,
-            mime_type: mime_str,
+            // mime_type: mime_str,
             is_file,
             len,
             children: RefCell::new(Vec::new()),
@@ -104,11 +109,11 @@ impl Analyzer {
 
                 {
                     let path_str = Some(path.to_str().unwrap().clone());
-                    let new_child = node.push_child(path_str.unwrap(), true, len);
-                    self.files.borrow_mut().push(new_child);
+                    // let new_child = node.push_child(path_str.unwrap(), true, len);
+                    // self.files.borrow_mut().push(new_child);
                     self.stats
                         .borrow_mut()
-                        .register_file(path_str.unwrap(), len);
+                        .register_file(path_str.unwrap(), len, ctx.args.nlargest);
                 }
             }
         }
@@ -116,6 +121,7 @@ impl Analyzer {
         Ok(())
     }
 
+    /*
     pub fn get_by_type(&self, mime_type: &str) -> Vec<Box<FileTreeNode>> {
         let files = self.files.borrow();
 
@@ -126,15 +132,8 @@ impl Analyzer {
             .collect();
 
         return filtered;
-
-        /*
-        let collected: RefCell<Vec<&FileTreeNode>> = RefCell::new(Vec::new());
-
-        self._get_by_type(mime_type, &RefCell::new(self.tree.borrow()), &collected);
-        return collected;
-        */
     }
-
+    */
     /*
     fn _get_by_type<'a>(&self, mime_type: &str, node: &RefCell<&'a FileTreeNode>, collected: &RefCell<Vec<&'a FileTreeNode>>) {
         let children = node.borrow().children.borrow();
@@ -155,22 +154,47 @@ impl Analyzer {
     */
 
     pub fn print_report(&self, _ctx: &Context) {
-        println!("{}", "Usage Report".bold().green());
+        println!("{}", "\n-- Usage Report --\n".bright_yellow());
 
-        let print_type = |mime: &str| {
-            let files = self.get_by_type(mime);
-            println!("Total {}: {} ({})", mime, files.len(), bytes_to_human(files.iter().map(|f| f.len).sum::<u64>()));
+        let mut sys = System::new_all();
+        sys.refresh_all();
+
+        println!("{}", "Totals:".bright_green());
+        println!("  Disk usage: {}", bytes_to_human(self.total_bytes.get()));
+
+        println!("");
+
+        println!("{}", "Current disk usage:".bright_green());
+        for disk in sys.disks() {
+            let p = (disk.available_space() as f64 / disk.total_space() as f64) * 100.0;
+            println!(
+                "  {} ({} free ({:.2}%) , {} total)",
+                disk.name().to_str().unwrap(),
+                bytes_to_human(disk.available_space()),
+                p,
+                bytes_to_human(disk.total_space())
+            );
+        }
+
+        println!("");
+
+        let print_type = |type_name: &str, len: u64| {
+            println!("  {}: {}", type_name, bytes_to_human(len));
         };
 
+        let stats = self.stats.borrow();
+        println!("{}", "File types:".bright_green());
+        print_type("Images", stats.total_images);
+        print_type("Videos", stats.total_videos);
+        print_type("Music", stats.total_music);
+        print_type("Documents", stats.total_documents);
+        print_type("Archives", stats.total_archives);
+        print_type("Binaries", stats.total_binaries);
+        print_type("Other", stats.total_other);
 
-        print_type("image/");
-        print_type("video/");
-        print_type("application/zip");
+        println!("");
 
-        println!("{}", "Top files:".bold());
+        println!("{}", "Top files:".bright_green());
         self.stats.borrow().print_largest();
-
-        println!("Total: {}", bytes_to_human(self.total_bytes.get()));
-        println!("Total files: {}", self.files.borrow().len());
     }
 }

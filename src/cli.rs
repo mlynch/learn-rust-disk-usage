@@ -9,6 +9,9 @@ pub struct Args {
     #[clap(short, long, default_value = "")]
     pub ignore: String,
 
+    #[clap(short, long, default_value_t = 20)]
+    pub nlargest: usize,
+
     #[clap(long)]
     pub home: bool,
 
