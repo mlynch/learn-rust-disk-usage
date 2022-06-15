@@ -6,9 +6,11 @@ use colored::*;
 
 use crate::utils::bytes_to_human;
 
+type LargeFile = (String, u64);
+
 pub struct AnalyzerStats {
     //pub largest_files: PriorityQueue<String, u64>,
-    pub largest_files: Box<Vec<(String, u64)>>,
+    pub largest_files: Box<Vec<LargeFile>>,
     pub total_music: u64,
     pub total_images: u64,
     pub total_videos: u64,
@@ -32,7 +34,13 @@ impl AnalyzerStats {
             total_other: 0
         }
     }
+
+    pub fn get_largest(&self) -> &Vec<LargeFile> {
+        return self.largest_files.borrow();
+    }
+
     pub fn register_file(&mut self, path_str: &str, len: u64, nlargest: usize) {
+        println!("{}", path_str);
 
         let mut mime_str = String::from("");
         if let Some(mime) = mime_guess::from_path(path_str).first() {
@@ -93,11 +101,11 @@ impl AnalyzerStats {
     pub fn push_largest(&mut self, path_str: &str, len: u64, nlargest: usize) {
         if self.largest_files.len() == 0 {
             self.largest_files.push((path_str.to_string(), len));
+            self.largest_files.sort_by(|a, b| b.1.cmp(&a.1));
         } else if self.largest_files.iter().any(|x| len > x.1) {
             self.largest_files.push((path_str.to_string(), len));
+            self.largest_files.sort_by(|a, b| b.1.cmp(&a.1));
         }
-
-        self.largest_files.sort_by(|a, b| b.1.cmp(&a.1));
 
         if self.largest_files.len() > nlargest {
             self.largest_files.truncate(nlargest);

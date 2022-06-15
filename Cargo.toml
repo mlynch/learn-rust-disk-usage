@@ -8,8 +8,10 @@ edition = "2021"
 [dependencies]
 clap = { version = "3.1.18", features = ["derive"] }
 colored = "2.0.0"
+dialoguer = "0.10.1"
 dirs = "4.0.0"
 human_bytes = "0.3.1"
 mime_guess = "2.0.4"
 priority-queue = "1.2.2"
 sysinfo = "0.24.3"
+trash = "2.1.4"

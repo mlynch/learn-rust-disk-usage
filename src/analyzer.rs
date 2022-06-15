@@ -12,6 +12,8 @@ use crate::{
 
 use colored::*;
 
+use dialoguer::{theme::ColorfulTheme, Select};
+
 // use sysinfo::{ System };
 use sysinfo::{DiskExt, System, SystemExt};
 
@@ -71,12 +73,12 @@ impl Analyzer {
     }
 
     pub fn analyze(&self, ctx: &Context) -> std::io::Result<()> {
-        self.read_dir(ctx, self.tree.as_ref())?;
+        self.read_dir(ctx, self.tree.path.as_str())?;
 
         Ok(())
     }
 
-    fn read_dir(&self, ctx: &Context, node: &FileTreeNode) -> std::io::Result<()> {
+    fn read_dir(&self, ctx: &Context, path: &str) -> std::io::Result<()> {
         /*
         {
             let entries = &mut fs::read_dir(node.path).unwrap_or();
@@ -84,7 +86,7 @@ impl Analyzer {
         }
         */
 
-        let entries = fs::read_dir(node.path.as_str())?.filter_map(Result::ok);
+        let entries = fs::read_dir(path)?.filter_map(Result::ok);
 
         for entry in entries {
             let path = &entry.path();
@@ -94,10 +96,10 @@ impl Analyzer {
                     continue;
                 }
                 let path_str = path.to_str().unwrap();
-                let new_child = node.push_child(path_str, true, 0);
+                // let new_child = node.push_child(path_str, true, 0);
 
                 // let node = FileTreeNode::new(String::from(path_str));
-                self.read_dir(ctx, &new_child)?;
+                self.read_dir(ctx, path_str)?;
             } else if path.is_file() {
                 if !ctx.args.hidden && is_hidden(path) {
                     continue;
@@ -196,5 +198,55 @@ impl Analyzer {
 
         println!("{}", "Top files:".bright_green());
         self.stats.borrow().print_largest();
+    }
+
+    pub fn prompt_delete(&self) {
+        let mut total_deleted: u64 = 0;
+
+        let selections = &[
+            "Keep",
+            "Exit",
+            "Delete (trash)",
+            "Delete (force)"
+        ];
+        for file in self.stats.borrow().get_largest() {
+            println!("");
+            let selection = Select::with_theme(&ColorfulTheme::default())
+                .with_prompt(format!("Delete {} ({})?", file.0, bytes_to_human(file.1)))
+                .default(0)
+                .items(&selections[..])
+                .interact_opt()
+                .unwrap();
+
+            if let Some(selection) = selection {
+                if selection == 1 {
+                    // Exit on exit
+                    break
+                }
+
+                if selection == 2 {
+                    println!("Deleting {}", file.0);
+                    match trash::delete(&file.0) {
+                        Ok(_) => {
+                            println!("Deleted!");
+                            total_deleted += file.1;
+                        },
+                        Err(e) => println!("Unable to delete: {}", e)
+                    }
+                } else if selection == 3 {
+                    println!("Deleting (force) {}", file.0);
+                    match fs::remove_file(&file.0) {
+                        Ok(_) => {
+                            println!("Deleted!");
+                            total_deleted += file.1;
+                        },
+                        Err(e) => println!("Unable to delete: {}", e)
+                    }
+                }
+            }
+        }
+
+        println!("");
+        println!("Reclaimed {} of disk space", bytes_to_human(total_deleted));
     }
 }

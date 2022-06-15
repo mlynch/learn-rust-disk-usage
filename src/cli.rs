@@ -16,7 +16,10 @@ pub struct Args {
     pub home: bool,
 
     #[clap(long)]
-    pub hidden: bool
+    pub hidden: bool,
+
+    #[clap(long)]
+    pub delete_prompt: bool
 }
 
 pub fn get_args() -> Args {
