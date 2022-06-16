@@ -25,7 +25,7 @@ fn main() {
         root: root.clone()
     };
 
-    let analyzer = Analyzer::new(ctx.root.clone());
+    let analyzer = Analyzer::new(ctx.root.clone(), ctx.args.ignore.clone());
 
     analyzer.analyze(&ctx).expect("Unable to read file or directory");
 

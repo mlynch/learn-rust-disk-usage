@@ -1,7 +1,7 @@
 use std::{
     cell::{Cell, RefCell},
-    fs::{self, metadata},
-    rc::Rc,
+    fs::{self, metadata, ReadDir},
+    rc::Rc, path::Path, env::consts::OS,
 };
 
 use crate::{
@@ -14,6 +14,7 @@ use colored::*;
 
 use dialoguer::{theme::ColorfulTheme, Select};
 
+use glob::Pattern;
 // use sysinfo::{ System };
 use sysinfo::{DiskExt, System, SystemExt};
 
@@ -23,7 +24,7 @@ pub struct FileTreeNode {
     pub is_file: bool,
     // mime_type: String,
     pub len: u64,
-    children: RefCell<Vec<FileTreeNode>>,
+    // children: RefCell<Vec<FileTreeNode>>,
 }
 
 impl FileTreeNode {
@@ -40,10 +41,11 @@ impl FileTreeNode {
             // mime_type: mime_str,
             is_file,
             len,
-            children: RefCell::new(Vec::new()),
+            // children: RefCell::new(Vec::new()),
         }
     }
 
+    /*
     fn push_child(&self, path: &str, is_file: bool, len: u64) -> Box<FileTreeNode> {
         let child = Box::new(FileTreeNode::new(String::from(path), is_file, len));
 
@@ -51,76 +53,84 @@ impl FileTreeNode {
 
         child
     }
+    */
 }
 
 pub struct Analyzer {
     total_bytes: Cell<u64>,
     tree: Rc<FileTreeNode>,
     stats: RefCell<AnalyzerStats>,
-    files: RefCell<Vec<Box<FileTreeNode>>>,
+    // files: RefCell<Vec<Box<FileTreeNode>>>,
+    ignore_pattern: Pattern
 }
 
 impl Analyzer {
-    pub fn new(root: String) -> Analyzer {
+    pub fn new(root: String, ignore_pattern: String) -> Analyzer {
         let stats = RefCell::new(AnalyzerStats::new());
+
+        println!("Ignoring paths matching {}", ignore_pattern);
 
         Analyzer {
             tree: Rc::new(FileTreeNode::new(root, false, 0)),
             stats,
             total_bytes: Cell::new(0),
-            files: RefCell::new(Vec::new()),
+            // files: RefCell::new(Vec::new()),
+            ignore_pattern: Pattern::new(ignore_pattern.as_str()).expect("Unable to parse ignore glob pattern")
         }
     }
 
     pub fn analyze(&self, ctx: &Context) -> std::io::Result<()> {
-        self.read_dir(ctx, self.tree.path.as_str())?;
+        self.read_dir(ctx, self.tree.path.as_str());
 
         Ok(())
     }
 
-    fn read_dir(&self, ctx: &Context, path: &str) -> std::io::Result<()> {
-        /*
-        {
-            let entries = &mut fs::read_dir(node.path).unwrap_or();
-            println!("Reading {} entries for dir: {}", entries.count(), node.path);
-        }
-        */
+    fn read_dir(&self, ctx: &Context, path: &str) {
+        let process_entries = |entries: ReadDir| {
+            for entry in entries {
+                let path = &entry.unwrap().path();
 
-        let entries = fs::read_dir(path)?.filter_map(Result::ok);
+                if path.is_dir() && !self.should_skip(&path) {
+                    if !ctx.args.hidden && is_hidden(path) {
+                        continue;
+                    }
+                    let path_str = path.to_str().unwrap();
+                    // let new_child = node.push_child(path_str, true, 0);
 
-        for entry in entries {
-            let path = &entry.path();
+                    // let node = FileTreeNode::new(String::from(path_str));
+                    self.read_dir(ctx, path_str);
+                } else if path.is_file() {
+                    if !ctx.args.hidden && is_hidden(path) {
+                        continue;
+                    }
 
-            if path.is_dir() {
-                if !ctx.args.hidden && is_hidden(path) {
-                    continue;
-                }
-                let path_str = path.to_str().unwrap();
-                // let new_child = node.push_child(path_str, true, 0);
+                    match metadata(path) {
+                        Ok(meta) => {
+                            let len = meta.len();
 
-                // let node = FileTreeNode::new(String::from(path_str));
-                self.read_dir(ctx, path_str)?;
-            } else if path.is_file() {
-                if !ctx.args.hidden && is_hidden(path) {
-                    continue;
-                }
+                            self.total_bytes.set(self.total_bytes.get() + len);
 
-                let len = metadata(path)?.len();
-
-                self.total_bytes.set(self.total_bytes.get() + len);
-
-                {
-                    let path_str = Some(path.to_str().unwrap().clone());
-                    // let new_child = node.push_child(path_str.unwrap(), true, len);
-                    // self.files.borrow_mut().push(new_child);
-                    self.stats
-                        .borrow_mut()
-                        .register_file(path_str.unwrap(), len, ctx.args.nlargest);
+                            let path_str = Some(path.to_str().unwrap().clone());
+                            // let new_child = node.push_child(path_str.unwrap(), true, len);
+                            // self.files.borrow_mut().push(new_child);
+                            self.stats
+                                .borrow_mut()
+                                .register_file(path_str.unwrap(), len, ctx.args.nlargest);
+                        },
+                        Err(e) => println!("Unable to read file {} - {}", path.to_str().unwrap(), e)
+                    }
                 }
             }
-        }
+        };
 
-        Ok(())
+        match fs::read_dir(path) {
+            Ok(entries) => {
+                process_entries(entries);
+            },
+            Err(e) => {
+                println!("Unable to read directory {} - {}", path, e);
+            }
+        }
     }
 
     /*
@@ -154,6 +164,30 @@ impl Analyzer {
         }
     }
     */
+
+    fn should_skip(&self, path: &Path) -> bool {
+        // Skip symlinks
+        if path.is_symlink() {
+            return true
+        }
+
+        if self.ignore_pattern.matches(path.to_str().unwrap()) {
+            println!("Skipping ignored path: {:?}", path.to_str());
+            return true
+        }
+
+        if OS == "macos" {
+            if let Some(ospath) = path.file_name() {
+                if let Some(filename) = ospath.to_str() {
+                    if filename.contains(".app") {
+                        return true
+                    }
+                }
+            }
+        }
+
+        return false
+    }
 
     pub fn print_report(&self, _ctx: &Context) {
         println!("{}", "\n-- Usage Report --\n".bright_yellow());
@@ -250,3 +284,16 @@ impl Analyzer {
         println!("Reclaimed {} of disk space", bytes_to_human(total_deleted));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use glob::Pattern;
+
+    #[test]
+    fn pattern_match() {
+        let pattern = Pattern::new("**/node_modules").expect("Unable to parse ignore glob pattern");
+
+        assert_eq!(pattern.matches("/Users/max/git/project/node_modules"), true);
+    }
+}
+

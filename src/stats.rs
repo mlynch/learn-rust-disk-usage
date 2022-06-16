@@ -40,7 +40,7 @@ impl AnalyzerStats {
     }
 
     pub fn register_file(&mut self, path_str: &str, len: u64, nlargest: usize) {
-        println!("{}", path_str);
+        // println!("{}", path_str);
 
         let mut mime_str = String::from("");
         if let Some(mime) = mime_guess::from_path(path_str).first() {
@@ -99,6 +99,10 @@ impl AnalyzerStats {
     }
 
     pub fn push_largest(&mut self, path_str: &str, len: u64, nlargest: usize) {
+        // Ignore files < 1MB
+        if len < 1024 * 1024 * 1024 {
+            return;
+        }
         if self.largest_files.len() == 0 {
             self.largest_files.push((path_str.to_string(), len));
             self.largest_files.sort_by(|a, b| b.1.cmp(&a.1));
