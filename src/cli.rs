@@ -12,6 +12,9 @@ pub struct Args {
     #[clap(short, long, default_value_t = 20)]
     pub nlargest: usize,
 
+    #[clap(short, long, default_value_t = 1024 * 1024)]
+    pub largebytes: usize,
+
     #[clap(long)]
     pub home: bool,
 

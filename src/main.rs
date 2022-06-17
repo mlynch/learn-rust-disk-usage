@@ -1,5 +1,6 @@
-use std::{thread, sync::{mpsc, Arc}};
+use std::{thread, sync::{Arc}};
 
+use chrono::{Local, DateTime};
 use egui::mutex::RwLock;
 
 use crate::{analyzer::Analyzer, ctx::Context, app::App};
@@ -11,6 +12,15 @@ mod utils;
 mod stats;
 mod app;
 
+type LargeFile = (String, u64);
+pub struct Scan {
+    pub dir: String,
+    pub started_at: DateTime<Local>,
+    pub completed_at: Option<DateTime<Local>>,
+    pub current_file: Option<String>,
+    pub total_bytes: u64,
+    pub largest_files: Box<Vec<LargeFile>>,
+}
 
 fn main() {
     let args = cli::get_args();
@@ -30,7 +40,14 @@ fn main() {
         root: root.clone()
     };
 
-    let current_file = Arc::new(RwLock::new(String::from("")));
+    let current_file = Arc::new(RwLock::new(Scan {
+        dir: root,
+        started_at: Local::now(),
+        completed_at: None,
+        current_file: Some(String::from("")),
+        total_bytes: 0,
+        largest_files: Box::new(vec![])
+    }));
 
     let producer_lock = current_file.clone();
     let app_lock = current_file.clone();

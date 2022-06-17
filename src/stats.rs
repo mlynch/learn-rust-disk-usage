@@ -39,7 +39,7 @@ impl AnalyzerStats {
         return self.largest_files.borrow();
     }
 
-    pub fn register_file(&mut self, path_str: &str, len: u64, nlargest: usize) {
+    pub fn register_file(&mut self, path_str: &str, len: u64, nlargest: usize, large_bytes: usize) {
         // println!("{}", path_str);
 
         let mut mime_str = String::from("");
@@ -47,7 +47,7 @@ impl AnalyzerStats {
             mime_str = mime.to_string();
         };
 
-        self.push_largest(path_str, len, nlargest);
+        self.push_largest(path_str, len, nlargest, large_bytes);
 
         // self.largest_files.push(path_str.to_owned(), len);
 
@@ -98,11 +98,14 @@ impl AnalyzerStats {
         }
     }
 
-    pub fn push_largest(&mut self, path_str: &str, len: u64, nlargest: usize) {
+    pub fn push_largest(&mut self, path_str: &str, len: u64, nlargest: usize, large_bytes: usize) {
         // Ignore files < 1MB
-        if len < 1024 * 1024 * 1024 {
+        // if len < 1024 * 1024 * 1024 {
+        if len < large_bytes as u64 {
             return;
         }
+        println!("Pushing large file: {} {}", path_str, len);
+
         if self.largest_files.len() == 0 {
             self.largest_files.push((path_str.to_string(), len));
             self.largest_files.sort_by(|a, b| b.1.cmp(&a.1));

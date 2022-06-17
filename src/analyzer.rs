@@ -1,14 +1,11 @@
 use std::{
     cell::{Cell, RefCell},
     fs::{self, metadata, ReadDir},
-    rc::Rc, path::Path, env::consts::OS, sync::{mpsc::Sender, Arc},
+    rc::Rc, path::Path, env::consts::OS, sync::{Arc},
+    time::SystemTime
 };
 
-use crate::{
-    ctx::Context,
-    stats::AnalyzerStats,
-    utils::{bytes_to_human, is_hidden},
-};
+use chrono::{Local, DateTime};
 
 use colored::*;
 
@@ -18,6 +15,12 @@ use egui::mutex::RwLock;
 use glob::Pattern;
 // use sysinfo::{ System };
 use sysinfo::{DiskExt, System, SystemExt};
+
+use crate::{
+    ctx::Context,
+    stats::AnalyzerStats,
+    utils::{bytes_to_human, is_hidden}, Scan,
+};
 
 #[derive(Clone)]
 pub struct FileTreeNode {
@@ -63,11 +66,11 @@ pub struct Analyzer {
     pub stats: RefCell<AnalyzerStats>,
     // files: RefCell<Vec<Box<FileTreeNode>>>,
     ignore_pattern: Pattern,
-    current_file: Arc<RwLock<String>>
+    state: Arc<RwLock<Scan>>
 }
 
 impl Analyzer {
-    pub fn new(root: String, ignore_pattern: String, current_file: Arc<RwLock<String>>) -> Analyzer {
+    pub fn new(root: String, ignore_pattern: String, state: Arc<RwLock<Scan>>) -> Analyzer {
         let stats = RefCell::new(AnalyzerStats::new());
 
         println!("Ignoring paths matching {}", ignore_pattern);
@@ -78,12 +81,19 @@ impl Analyzer {
             total_bytes: Cell::new(0),
             // files: RefCell::new(Vec::new()),
             ignore_pattern: Pattern::new(ignore_pattern.as_str()).expect("Unable to parse ignore glob pattern"),
-            current_file
+            state
         }
     }
 
     pub fn analyze(&self, ctx: &Context) -> std::io::Result<()> {
         self.read_dir(ctx, self.tree.path.as_str());
+
+        let mut w = self.state.write();
+
+        (*w).current_file = None;
+        (*w).largest_files = self.stats.borrow().largest_files.clone();
+        (*w).completed_at = Some(Local::now());
+
 
         Ok(())
     }
@@ -107,13 +117,15 @@ impl Analyzer {
                         continue;
                     }
 
-                    let mut w = self.current_file.write();
+                    let mut w = self.state.write();
 
-                    *w = path.to_str().unwrap().to_string();
+                    (*w).current_file = Some(path.to_str().unwrap().to_string());
 
                     match metadata(path) {
                         Ok(meta) => {
                             let len = meta.len();
+
+                            (*w).total_bytes += len;
 
                             self.total_bytes.set(self.total_bytes.get() + len);
 
@@ -122,7 +134,7 @@ impl Analyzer {
                             // self.files.borrow_mut().push(new_child);
                             self.stats
                                 .borrow_mut()
-                                .register_file(path_str.unwrap(), len, ctx.args.nlargest);
+                                .register_file(path_str.unwrap(), len, ctx.args.nlargest, ctx.args.largebytes);
                         },
                         Err(e) => println!("Unable to read file {} - {}", path.to_str().unwrap(), e)
                     }
