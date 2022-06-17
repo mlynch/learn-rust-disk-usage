@@ -1,10 +1,15 @@
-use crate::{analyzer::Analyzer, ctx::Context};
+use std::{thread, sync::{mpsc, Arc}};
+
+use egui::mutex::RwLock;
+
+use crate::{analyzer::Analyzer, ctx::Context, app::App};
 
 mod ctx;
 mod cli;
 mod analyzer;
 mod utils;
 mod stats;
+mod app;
 
 
 fn main() {
@@ -25,13 +30,23 @@ fn main() {
         root: root.clone()
     };
 
-    let analyzer = Analyzer::new(ctx.root.clone(), ctx.args.ignore.clone());
+    let current_file = Arc::new(RwLock::new(String::from("")));
 
-    analyzer.analyze(&ctx).expect("Unable to read file or directory");
+    let producer_lock = current_file.clone();
+    let app_lock = current_file.clone();
 
-    analyzer.print_report(&ctx);
+    thread::spawn(move|| {
+        let analyzer = Analyzer::new(ctx.root.clone(), ctx.args.ignore.clone(), producer_lock);
 
-    if ctx.args.delete_prompt {
-        analyzer.prompt_delete();
-    }
+        analyzer.analyze(&ctx).expect("Unable to read file or directory");
+        analyzer.print_report(&ctx);
+
+        // app.render_stats(&analyzer.stats.borrow());
+
+        if ctx.args.delete_prompt {
+            analyzer.prompt_delete();
+        }
+    });
+
+    let app = App::new(app_lock);
 }

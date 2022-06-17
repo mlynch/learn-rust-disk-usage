@@ -1,7 +1,7 @@
 use std::{
     cell::{Cell, RefCell},
     fs::{self, metadata, ReadDir},
-    rc::Rc, path::Path, env::consts::OS,
+    rc::Rc, path::Path, env::consts::OS, sync::{mpsc::Sender, Arc},
 };
 
 use crate::{
@@ -14,6 +14,7 @@ use colored::*;
 
 use dialoguer::{theme::ColorfulTheme, Select};
 
+use egui::mutex::RwLock;
 use glob::Pattern;
 // use sysinfo::{ System };
 use sysinfo::{DiskExt, System, SystemExt};
@@ -59,13 +60,14 @@ impl FileTreeNode {
 pub struct Analyzer {
     total_bytes: Cell<u64>,
     tree: Rc<FileTreeNode>,
-    stats: RefCell<AnalyzerStats>,
+    pub stats: RefCell<AnalyzerStats>,
     // files: RefCell<Vec<Box<FileTreeNode>>>,
-    ignore_pattern: Pattern
+    ignore_pattern: Pattern,
+    current_file: Arc<RwLock<String>>
 }
 
 impl Analyzer {
-    pub fn new(root: String, ignore_pattern: String) -> Analyzer {
+    pub fn new(root: String, ignore_pattern: String, current_file: Arc<RwLock<String>>) -> Analyzer {
         let stats = RefCell::new(AnalyzerStats::new());
 
         println!("Ignoring paths matching {}", ignore_pattern);
@@ -75,7 +77,8 @@ impl Analyzer {
             stats,
             total_bytes: Cell::new(0),
             // files: RefCell::new(Vec::new()),
-            ignore_pattern: Pattern::new(ignore_pattern.as_str()).expect("Unable to parse ignore glob pattern")
+            ignore_pattern: Pattern::new(ignore_pattern.as_str()).expect("Unable to parse ignore glob pattern"),
+            current_file
         }
     }
 
@@ -103,6 +106,10 @@ impl Analyzer {
                     if !ctx.args.hidden && is_hidden(path) {
                         continue;
                     }
+
+                    let mut w = self.current_file.write();
+
+                    *w = path.to_str().unwrap().to_string();
 
                     match metadata(path) {
                         Ok(meta) => {
