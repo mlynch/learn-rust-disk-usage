@@ -109,10 +109,11 @@ impl AnalyzerStats {
         if self.largest_files.len() == 0 {
             self.largest_files.push((path_str.to_string(), len));
             self.largest_files.sort_by(|a, b| b.1.cmp(&a.1));
-        } else if self.largest_files.iter().any(|x| len > x.1) {
+        } else { //else if self.largest_files.iter().any(|x| len > x.1) {
             self.largest_files.push((path_str.to_string(), len));
             self.largest_files.sort_by(|a, b| b.1.cmp(&a.1));
         }
+        //}
 
         if self.largest_files.len() > nlargest {
             self.largest_files.truncate(nlargest);

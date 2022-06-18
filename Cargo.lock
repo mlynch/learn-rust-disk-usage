@@ -502,6 +502,7 @@ dependencies = [
  "dirs",
  "eframe",
  "egui",
+ "egui_extras",
  "glob",
  "human_bytes",
  "mime_guess",
@@ -576,6 +577,15 @@ dependencies = [
  "tracing",
  "webbrowser",
  "winit",
+]
+
+[[package]]
+name = "egui_extras"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "877bfcce06463cdbcfd7f4efd57608b1384d6d9ae03b33e503fbba1d1a899a52"
+dependencies = [
+ "egui",
 ]
 
 [[package]]
