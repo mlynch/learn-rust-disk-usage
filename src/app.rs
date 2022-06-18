@@ -78,10 +78,10 @@ fn render_results(ui: &mut Ui, ctx: &egui::Context, state: &Scan, ui_state: &Ref
 
     ui.label("Largest files:");
 
-    // let mut s = ui_state.borrow_mut();
-    let mut s = ui_state.borrow_mut();
 
-    confirm(ui, ctx, "Are you sure you want to delete that file?", &mut s.show_delete_confirm, || {
+    let mut show_confirm = ui_state.borrow().show_delete_confirm.clone();
+
+    confirm(ui, ctx, "Are you sure you want to delete that file?", &mut show_confirm, || {
         println!("Closing window here");
         let mut s = ui_state.borrow_mut();
 
@@ -94,11 +94,15 @@ fn render_results(ui: &mut Ui, ctx: &egui::Context, state: &Scan, ui_state: &Ref
                 ui.label(format!("{} ({})", file.0, bytes_to_human(file.1)));
 
                 if ui.button("Delete (trash)").clicked() {
+                    // let mut s = ui_state.borrow_mut();
+                    let mut s = ui_state.borrow_mut();
                     s.show_delete_confirm = true;
                     s.file_to_delete = Some((file.0.clone(), false));
                     // *show_delete_confirm = true;
                 }
                 if ui.button("Delete (force)").clicked() {
+                    // let mut s = ui_state.borrow_mut();
+                    let mut s = ui_state.borrow_mut();
                     s.show_delete_confirm = true;
                     s.file_to_delete = Some((file.0.clone(), true));
                     // *show_delete_confirm = true;
