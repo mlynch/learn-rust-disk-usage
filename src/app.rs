@@ -11,6 +11,7 @@ use egui::{
     TextStyle, TopBottomPanel, Ui, Visuals, Window,
 };
 
+use crate::pie_chart::PieChart;
 use crate::{utils::bytes_to_human, Scan};
 
 #[derive(PartialEq)]

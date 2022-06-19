@@ -66,11 +66,11 @@ pub struct Analyzer {
     pub stats: RefCell<AnalyzerStats>,
     // files: RefCell<Vec<Box<FileTreeNode>>>,
     ignore_pattern: Pattern,
-    state: Arc<RwLock<Scan>>
+    scan_results: Arc<RwLock<Scan>>
 }
 
 impl Analyzer {
-    pub fn new(root: String, ignore_pattern: String, state: Arc<RwLock<Scan>>) -> Analyzer {
+    pub fn new(root: String, ignore_pattern: String, scan_results: Arc<RwLock<Scan>>) -> Analyzer {
         let stats = RefCell::new(AnalyzerStats::new());
 
         println!("Ignoring paths matching {}", ignore_pattern);
@@ -81,25 +81,36 @@ impl Analyzer {
             total_bytes: Cell::new(0),
             // files: RefCell::new(Vec::new()),
             ignore_pattern: Pattern::new(ignore_pattern.as_str()).expect("Unable to parse ignore glob pattern"),
-            state
+            scan_results
         }
     }
 
     pub fn analyze(&self, ctx: &Context) -> std::io::Result<()> {
         self.read_dir(ctx, self.tree.path.as_str());
 
-        let mut w = self.state.write();
+        let mut w = self.scan_results.write();
+
+        let stats = self.stats.borrow();
 
         (*w).current_file = None;
-        (*w).largest_files = self.stats.borrow().largest_files.clone();
+        (*w).largest_files = stats.largest_files.clone();
         (*w).completed_at = Some(Local::now());
+        (*w).total_archives = stats.total_archives;
+        (*w).total_binaries = stats.total_binaries;
+        (*w).total_documents = stats.total_documents;
+        (*w).total_images = stats.total_images;
+        (*w).total_music = stats.total_music;
+        (*w).total_other = stats.total_other;
+        (*w).total_videos = stats.total_videos;
 
 
         Ok(())
     }
 
-    fn read_dir(&self, ctx: &Context, path: &str) {
-        let process_entries = |entries: ReadDir| {
+    fn read_dir(&self, ctx: &Context, path: &str) -> u64 {
+        let mut total_dir_usage: u64 = 0;
+
+        let mut process_entries = |entries: ReadDir| {
             for entry in entries {
                 let path = &entry.unwrap().path();
 
@@ -111,19 +122,23 @@ impl Analyzer {
                     // let new_child = node.push_child(path_str, true, 0);
 
                     // let node = FileTreeNode::new(String::from(path_str));
-                    self.read_dir(ctx, path_str);
+                    total_dir_usage += self.read_dir(ctx, path_str);
+
+                    self.stats.borrow_mut().register_dir_usage(path, total_dir_usage);
                 } else if path.is_file() {
                     if !ctx.args.hidden && is_hidden(path) {
                         continue;
                     }
 
-                    let mut w = self.state.write();
+                    let mut w = self.scan_results.write();
 
                     (*w).current_file = Some(path.to_str().unwrap().to_string());
 
                     match metadata(path) {
                         Ok(meta) => {
                             let len = meta.len();
+
+                            total_dir_usage += len;
 
                             (*w).total_bytes += len;
 
@@ -140,6 +155,7 @@ impl Analyzer {
                     }
                 }
             }
+
         };
 
         match fs::read_dir(path) {
@@ -150,6 +166,8 @@ impl Analyzer {
                 println!("Unable to read directory {} - {}", path, e);
             }
         }
+
+        total_dir_usage
     }
 
     /*

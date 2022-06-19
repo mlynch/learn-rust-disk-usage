@@ -1,14 +1,16 @@
-use std::borrow::Borrow;
+use std::{borrow::Borrow, path::PathBuf};
 
 // use priority_queue::PriorityQueue;
 
 use colored::*;
+use glob::Pattern;
 
 use crate::utils::bytes_to_human;
 
 type LargeFile = (String, u64);
 
 pub struct AnalyzerStats {
+    developer_dir_pattern: Pattern,
     //pub largest_files: PriorityQueue<String, u64>,
     pub largest_files: Box<Vec<LargeFile>>,
     pub total_music: u64,
@@ -24,6 +26,7 @@ impl AnalyzerStats {
     pub fn new() -> AnalyzerStats {
         AnalyzerStats {
             //largest_files: PriorityQueue::with_capacity(100),
+            developer_dir_pattern: Pattern::new("**/node_modules").unwrap(),
             largest_files: Box::new(vec![]),
             total_music: 0,
             total_images: 0,
@@ -37,6 +40,14 @@ impl AnalyzerStats {
 
     pub fn get_largest(&self) -> &Vec<LargeFile> {
         return self.largest_files.borrow();
+    }
+
+    pub fn register_dir_usage(&mut self, path: &PathBuf, len: u64) {
+        let dirname = path.file_name().expect("Unable to process dir").to_str().unwrap();
+
+        if self.developer_dir_pattern.matches(dirname) {
+            println!("Found developer dir {:?} with size {}", path.to_str(), bytes_to_human(len));
+        }
     }
 
     pub fn register_file(&mut self, path_str: &str, len: u64, nlargest: usize, large_bytes: usize) {
@@ -104,7 +115,7 @@ impl AnalyzerStats {
         if len < large_bytes as u64 {
             return;
         }
-        println!("Pushing large file: {} {}", path_str, len);
+        // println!("Pushing large file: {} {}", path_str, len);
 
         if self.largest_files.len() == 0 {
             self.largest_files.push((path_str.to_string(), len));
