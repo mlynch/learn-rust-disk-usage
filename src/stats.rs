@@ -1,7 +1,5 @@
 use std::{borrow::Borrow, path::PathBuf};
 
-// use priority_queue::PriorityQueue;
-
 use colored::*;
 use glob::Pattern;
 
@@ -11,15 +9,16 @@ type LargeFile = (String, u64);
 
 pub struct AnalyzerStats {
     developer_dir_pattern: Pattern,
-    //pub largest_files: PriorityQueue<String, u64>,
     pub largest_files: Box<Vec<LargeFile>>,
+    pub developer_dirs: Vec<LargeFile>,
     pub total_music: u64,
     pub total_images: u64,
     pub total_videos: u64,
     pub total_documents: u64,
     pub total_binaries: u64,
     pub total_archives: u64,
-    pub total_other: u64
+    pub total_other: u64,
+    pub dev_total_usage: u64
 }
 
 impl AnalyzerStats {
@@ -28,13 +27,15 @@ impl AnalyzerStats {
             //largest_files: PriorityQueue::with_capacity(100),
             developer_dir_pattern: Pattern::new("**/node_modules").unwrap(),
             largest_files: Box::new(vec![]),
+            developer_dirs: vec![],
             total_music: 0,
             total_images: 0,
             total_videos: 0,
             total_documents: 0,
             total_binaries: 0,
             total_archives: 0,
-            total_other: 0
+            total_other: 0,
+            dev_total_usage: 0
         }
     }
 
@@ -46,11 +47,12 @@ impl AnalyzerStats {
         let dirname = path.file_name().expect("Unable to process dir").to_str().unwrap();
 
         if self.developer_dir_pattern.matches(dirname) {
-            println!("Found developer dir {:?} with size {}", path.to_str(), bytes_to_human(len));
+            self.dev_total_usage += len;
+            self.developer_dirs.push((String::from(path.to_str().unwrap()), len));
         }
     }
 
-    pub fn register_file(&mut self, path_str: &str, len: u64, nlargest: usize, large_bytes: usize) {
+    pub fn register_file(&mut self, path_str: &str, len: u64, nlargest: u64, large_bytes: u64) {
         // println!("{}", path_str);
 
         let mut mime_str = String::from("");
@@ -60,7 +62,6 @@ impl AnalyzerStats {
 
         self.push_largest(path_str, len, nlargest, large_bytes);
 
-        // self.largest_files.push(path_str.to_owned(), len);
 
         if mime_str.contains("image/") {
             self.total_images += len;
@@ -109,13 +110,10 @@ impl AnalyzerStats {
         }
     }
 
-    pub fn push_largest(&mut self, path_str: &str, len: u64, nlargest: usize, large_bytes: usize) {
-        // Ignore files < 1MB
-        // if len < 1024 * 1024 * 1024 {
+    pub fn push_largest(&mut self, path_str: &str, len: u64, nlargest: u64, large_bytes: u64) {
         if len < large_bytes as u64 {
             return;
         }
-        // println!("Pushing large file: {} {}", path_str, len);
 
         if self.largest_files.len() == 0 {
             self.largest_files.push((path_str.to_string(), len));
@@ -124,24 +122,11 @@ impl AnalyzerStats {
             self.largest_files.push((path_str.to_string(), len));
             self.largest_files.sort_by(|a, b| b.1.cmp(&a.1));
         }
-        //}
 
-        if self.largest_files.len() > nlargest {
-            self.largest_files.truncate(nlargest);
+        if self.largest_files.len() > nlargest as usize {
+            self.largest_files.truncate(nlargest as usize);
         }
     }
-
-    /*
-    pub fn print_largest(&self) {
-        let largest_files = self.largest_files.clone();
-
-        let sorted = largest_files.into_sorted_iter();
-
-        for (path, len) in sorted.take(10) {
-            println!("{} ({})", path.purple().bold(), bytes_to_human(len).bold());
-        }
-    }
-    */
 
     pub fn print_largest(&self) {
         let largest: &Box<Vec<(String, u64)>> = self.largest_files.borrow();

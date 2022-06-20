@@ -17,9 +17,8 @@ use glob::Pattern;
 use sysinfo::{DiskExt, System, SystemExt};
 
 use crate::{
-    ctx::Context,
     stats::AnalyzerStats,
-    utils::{bytes_to_human, is_hidden}, Scan,
+    utils::{bytes_to_human, is_hidden}, app::Scan
 };
 
 #[derive(Clone)]
@@ -60,33 +59,42 @@ impl FileTreeNode {
     */
 }
 
-pub struct Analyzer {
+pub struct ScanSettings {
+    pub dir: String,
+    pub ignore: String,
+    pub nlargest: u64,
+    pub largebytes: u64,
+    pub hidden: bool,
+}
+
+
+pub struct Analyzer<'a> {
     total_bytes: Cell<u64>,
     tree: Rc<FileTreeNode>,
     pub stats: RefCell<AnalyzerStats>,
     // files: RefCell<Vec<Box<FileTreeNode>>>,
     ignore_pattern: Pattern,
+    settings: &'a ScanSettings,
     scan_results: Arc<RwLock<Scan>>
 }
 
-impl Analyzer {
-    pub fn new(root: String, ignore_pattern: String, scan_results: Arc<RwLock<Scan>>) -> Analyzer {
+impl<'a> Analyzer<'a> {
+    pub fn new(settings: &'a ScanSettings, scan_results: Arc<RwLock<Scan>>) -> Analyzer<'a> {
         let stats = RefCell::new(AnalyzerStats::new());
 
-        println!("Ignoring paths matching {}", ignore_pattern);
-
         Analyzer {
-            tree: Rc::new(FileTreeNode::new(root, false, 0)),
+            tree: Rc::new(FileTreeNode::new(settings.dir.clone(), false, 0)),
             stats,
             total_bytes: Cell::new(0),
             // files: RefCell::new(Vec::new()),
-            ignore_pattern: Pattern::new(ignore_pattern.as_str()).expect("Unable to parse ignore glob pattern"),
+            ignore_pattern: Pattern::new(settings.ignore.as_str()).expect("Unable to parse ignore glob pattern"),
+            settings,
             scan_results
         }
     }
 
-    pub fn analyze(&self, ctx: &Context) -> std::io::Result<()> {
-        self.read_dir(ctx, self.tree.path.as_str());
+    pub fn analyze(&self) -> std::io::Result<()> {
+        self.read_dir(self.tree.path.as_str());
 
         let mut w = self.scan_results.write();
 
@@ -107,7 +115,7 @@ impl Analyzer {
         Ok(())
     }
 
-    fn read_dir(&self, ctx: &Context, path: &str) -> u64 {
+    fn read_dir(&self, path: &str) -> u64 {
         let mut total_dir_usage: u64 = 0;
 
         let mut process_entries = |entries: ReadDir| {
@@ -115,18 +123,18 @@ impl Analyzer {
                 let path = &entry.unwrap().path();
 
                 if path.is_dir() && !self.should_skip(&path) {
-                    if !ctx.args.hidden && is_hidden(path) {
+                    if !self.settings.hidden && is_hidden(path) {
                         continue;
                     }
                     let path_str = path.to_str().unwrap();
                     // let new_child = node.push_child(path_str, true, 0);
 
                     // let node = FileTreeNode::new(String::from(path_str));
-                    total_dir_usage += self.read_dir(ctx, path_str);
+                    total_dir_usage += self.read_dir(path_str);
 
                     self.stats.borrow_mut().register_dir_usage(path, total_dir_usage);
                 } else if path.is_file() {
-                    if !ctx.args.hidden && is_hidden(path) {
+                    if !self.settings.hidden && is_hidden(path) {
                         continue;
                     }
 
@@ -149,7 +157,7 @@ impl Analyzer {
                             // self.files.borrow_mut().push(new_child);
                             self.stats
                                 .borrow_mut()
-                                .register_file(path_str.unwrap(), len, ctx.args.nlargest, ctx.args.largebytes);
+                                .register_file(path_str.unwrap(), len, self.settings.nlargest, self.settings.largebytes);
                         },
                         Err(e) => println!("Unable to read file {} - {}", path.to_str().unwrap(), e)
                     }
@@ -226,7 +234,7 @@ impl Analyzer {
         return false
     }
 
-    pub fn print_report(&self, _ctx: &Context) {
+    pub fn print_report(&self) {
         println!("{}", "\n-- Usage Report --\n".bright_yellow());
 
         let mut sys = System::new_all();
