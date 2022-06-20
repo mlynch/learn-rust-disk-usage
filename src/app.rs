@@ -28,15 +28,15 @@ enum CurrentTab {
 #[derive(Clone)]
 pub struct UiState {
     show_delete_confirm: bool,
-    show_settings: bool,
+    show_settings: RefCell<bool>,
     file_to_delete: Option<(String, bool)>,
     current_tab: CurrentTab,
-    setting_root_dir: String,
-    setting_ignore_glob: String,
-    setting_developer_cache_dirs: String,
-    setting_hidden: bool,
-    setting_nlargest: u64,
-    setting_largebytes: u64
+    setting_root_dir: RefCell<String>,
+    setting_ignore_glob: RefCell<String>,
+    setting_developer_cache_dirs: RefCell<String>,
+    setting_hidden: RefCell<bool>,
+    setting_nlargest: RefCell<u64>,
+    setting_largebytes: RefCell<u64>
 }
 
 type LargeFile = (String, u64);
@@ -72,7 +72,7 @@ impl eframe::App for App {
         let scan_results = &*r;
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            if self.ui_state.borrow().show_settings {
+            if *self.ui_state.borrow().show_settings.borrow() {
                 render_settings(ui, ctx, scan_results, &self.ui_state);
             }
 
@@ -103,8 +103,9 @@ impl eframe::App for App {
                 });
 
                 if ui.button("Settings").clicked() {
-                    let mut s = self.ui_state.borrow_mut();
-                    s.show_settings = true;
+                    let state = self.ui_state.borrow();
+                    let mut s = state.show_settings.borrow_mut();
+                    *s = true;
                 }
             });
             CentralPanel::default().show(ctx, |ui| {
@@ -297,8 +298,8 @@ fn render_summary(ui: &mut Ui, ctx: &egui::Context, scan_results: &Scan, ui_stat
 }
 
 fn render_settings(ui: &mut Ui, ctx: &egui::Context, scan_results: &Scan, ui_state: &RefCell<UiState>) {
-    let mut state = ui_state.borrow_mut();
-    let mut open = state.show_settings;
+    let state = ui_state.borrow();
+    let mut open = state.show_settings.borrow_mut();
 
     Window::new("Settings")
         // .open(&mut ui_state.borrow_mut().show_delete_confirm)
@@ -310,12 +311,15 @@ fn render_settings(ui: &mut Ui, ctx: &egui::Context, scan_results: &Scan, ui_sta
                 .spacing([40.0, 4.0])
                 .striped(true)
                 .show(ui, |ui| {
+                    let mut setting_developer_cache_dirs = state.setting_developer_cache_dirs.borrow_mut();
+                    let mut setting_ignore_glob = state.setting_ignore_glob.borrow_mut();
+
                     ui.label("Developer cache dirs glob");
-                    ui.text_edit_singleline(&mut state.setting_developer_cache_dirs);
+                    ui.text_edit_singleline(&mut *setting_developer_cache_dirs);
                     ui.end_row();
 
                     ui.label("Ignore dirs");
-                    ui.text_edit_singleline(&mut state.setting_ignore_glob);
+                    ui.text_edit_singleline(&mut *setting_ignore_glob);
                     ui.end_row();
                 });
         });
@@ -355,15 +359,15 @@ impl App {
         options.initial_window_size = Some(Vec2::new(1024.0, 768.0));
         let ui_state = RefCell::new(UiState {
             show_delete_confirm: false,
-            show_settings: false,
+            show_settings: RefCell::new(false),
             file_to_delete: None,
             current_tab: CurrentTab::LargeFiles,
-            setting_developer_cache_dirs: String::from("**/node_modules"),
-            setting_ignore_glob: String::from(""),
-            setting_hidden: true,
-            setting_largebytes: 1024 * 1024 * 50,
-            setting_nlargest: 100,
-            setting_root_dir: String::from("/Users/max/hack/usage-test")
+            setting_developer_cache_dirs: RefCell::new(String::from("**/node_modules")),
+            setting_ignore_glob: RefCell::new(String::from("")),
+            setting_hidden: RefCell::new(true),
+            setting_largebytes: RefCell::new(1024 * 1024 * 50),
+            setting_nlargest: RefCell::new(100),
+            setting_root_dir: RefCell::new(String::from("/Users/max/hack/usage-test"))
         });
 
         let scan_results = Arc::new(RwLock::new(Scan {
@@ -401,18 +405,17 @@ impl App {
         let producer_lock = self.scan_results.clone();
         let app_lock = self.scan_results.clone();
 
-        let ui_state = self.ui_state.borrow().clone();
+        let state = self.ui_state.borrow().clone();
 
         let handle = thread::spawn(move || {
             // let _ = set_current_thread_priority(ThreadPriority::Min) as Result<(), _>;
             // let cloned_context = ctx.clone();
-
             let settings = ScanSettings {
-                ignore: ui_state.setting_ignore_glob,
-                dir: ui_state.setting_root_dir,
-                nlargest: ui_state.setting_nlargest,
-                largebytes: ui_state.setting_largebytes,
-                hidden: ui_state.setting_hidden,
+                ignore: (*state.setting_ignore_glob.borrow()).clone(),
+                dir: (*state.setting_root_dir.borrow()).clone(),
+                nlargest: *state.setting_nlargest.borrow(),
+                largebytes: *state.setting_largebytes.borrow(),
+                hidden: *state.setting_hidden.borrow(),
             };
 
             let analyzer = Analyzer::new(&settings, producer_lock);
