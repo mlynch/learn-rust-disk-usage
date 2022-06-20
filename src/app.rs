@@ -5,7 +5,7 @@ use std::{cell::RefCell, sync::Arc, thread};
 
 use chrono::{Local, DateTime};
 use dirs::home_dir;
-use egui::{Vec2, Frame};
+use egui::{Vec2, Frame, Context};
 use egui_extras::{Size, TableBuilder};
 
 use eframe::egui;
@@ -13,6 +13,7 @@ use egui::{
     mutex::RwLock, vec2, Align2, Button, CentralPanel, Layout, ScrollArea, SidePanel,
     TopBottomPanel, Ui, Visuals, Window,
 };
+use rfd::{AsyncFileDialog, FileDialog};
 
 use crate::analyzer::{Analyzer, ScanSettings};
 use crate::{utils::bytes_to_human};
@@ -58,6 +59,25 @@ pub struct Scan {
     pub developer_dirs: Vec<LargeFile>
 }
 
+impl Scan {
+    pub fn clear(&mut self) {
+        self.dir = String::from("");
+        self.started_at = Local::now();
+        self.completed_at = None;
+        self.current_file = None;
+        self.total_bytes = 0;
+        self.largest_files = Box::new(vec![]);
+        self.total_music = 0;
+        self.total_images = 0;
+        self.total_videos = 0;
+        self.total_documents = 0;
+        self.total_archives= 0;
+        self.total_other = 0;
+        self.dev_total_usage = 0;
+        self.developer_dirs = vec![];
+    }
+}
+
 pub struct App {
     scan_results: Arc<RwLock<Scan>>,
     ui_state: RefCell<UiState>,
@@ -81,34 +101,9 @@ impl eframe::App for App {
             .show(ctx, |ui| {
                 ui.heading("Disk Usage Analyzer");
             });
-            SidePanel::left("my_left_panel")
-            .frame(Frame::group(ui.style()).inner_margin(Vec2::new(8.0, 8.0)))
-            .show(ctx, |ui| {
-                ui.columns(2, |cols| {
-                    let scan_button = Button::new("Scan");
-
-                    if cols[0]
-                        .add_enabled(!*self.scanning.borrow(), scan_button)
-                        .clicked()
-                    {
-                        self.start_scan();
-                    }
-                    let stop_button = Button::new("Stop");
-                    if cols[1]
-                        .add_enabled(*self.scanning.borrow(), stop_button)
-                        .clicked()
-                    {
-                        self.stop_scan();
-                    }
-                });
-
-                if ui.button("Settings").clicked() {
-                    let state = self.ui_state.borrow();
-                    let mut s = state.show_settings.borrow_mut();
-                    *s = true;
-                }
-            });
             CentralPanel::default().show(ctx, |ui| {
+                render_scan_control(ui, ctx, &self, &self.ui_state);
+
                 if let Some(current_file) = &scan_results.current_file {
                     let duration = Local::now().signed_duration_since(scan_results.started_at);
                     let duration_str = format!(
@@ -169,6 +164,61 @@ impl eframe::App for App {
             */
         });
     }
+}
+
+fn render_scan_control(ui: &mut Ui, ctx: &egui::Context, app: &App, ui_state: &RefCell<UiState>) {
+    let scan_button = Button::new("Scan");
+
+    {
+        let state = ui_state.borrow();
+        let mut dir = state.setting_root_dir.borrow_mut();
+
+        ui.horizontal(|ui| {
+            ui.text_edit_singleline(&mut *dir);
+            if ui.button("...").clicked() {
+                let f = FileDialog::new()
+                    .set_directory(&*dir)
+                    .pick_folder();
+
+                if let Some(folder) = f {
+                    println!("Got folder: {:?}", folder.to_str());
+
+                    *dir = String::from(folder.to_str().unwrap());
+                }
+                // let data = file.unwrap().read().await;
+
+            }
+        });
+    }
+
+
+    if ui
+        .add_enabled(!*app.scanning.borrow(), scan_button)
+        .clicked()
+    {
+        app.start_scan();
+    }
+    let stop_button = Button::new("Stop");
+    if ui
+        .add_enabled(*app.scanning.borrow(), stop_button)
+        .clicked()
+    {
+        app.stop_scan();
+    }
+            /*
+            SidePanel::left("my_left_panel")
+            .frame(Frame::group(ui.style()).inner_margin(Vec2::new(8.0, 8.0)))
+            .show(ctx, |ui| {
+                ui.columns(2, |cols| {
+                });
+
+                if ui.button("Settings").clicked() {
+                    let state = self.ui_state.borrow();
+                    let mut s = state.show_settings.borrow_mut();
+                    *s = true;
+                }
+            });
+            */
 }
 
 fn delete_file(path: String, force: bool) {
@@ -371,7 +421,7 @@ impl App {
         });
 
         let scan_results = Arc::new(RwLock::new(Scan {
-            dir: String::from("~/hack/usage-test"),
+            dir: String::from(""),
             started_at: Local::now(),
             completed_at: None,
             current_file: None,
@@ -410,6 +460,12 @@ impl App {
         let handle = thread::spawn(move || {
             // let _ = set_current_thread_priority(ThreadPriority::Min) as Result<(), _>;
             // let cloned_context = ctx.clone();
+
+            let mut w = producer_lock.write();
+            w.clear();
+            w.dir = (*state.setting_root_dir.borrow()).clone();
+            drop(w);
+
             let settings = ScanSettings {
                 ignore: (*state.setting_ignore_glob.borrow()).clone(),
                 dir: (*state.setting_root_dir.borrow()).clone(),
@@ -421,17 +477,8 @@ impl App {
             let analyzer = Analyzer::new(&settings, producer_lock);
 
             analyzer.analyze().expect("Unable to read file or directory");
-            /*
-            analyzer.print_report(&ctx);
-            // app.render_stats(&analyzer.stats.borrow());
-
-            if ctx.args.delete_prompt {
-                analyzer.prompt_delete();
-            }
-            */
         });
 
-        handle.join().expect("Couldn't run scan");
     }
 
     fn stop_scan(&self) {
