@@ -29,6 +29,7 @@ enum CurrentTab {
 #[derive(Clone)]
 pub struct UiState {
     show_delete_confirm: bool,
+    show_developer_delete_confirm: bool,
     show_settings: RefCell<bool>,
     file_to_delete: Option<(String, bool)>,
     current_tab: CurrentTab,
@@ -277,6 +278,24 @@ fn render_results(ui: &mut Ui, ctx: &egui::Context, state: &Scan, ui_state: &Ref
         },
     );
 
+    let mut show_developer_delete_confirm = s.show_developer_delete_confirm.clone();
+
+    confirm(
+        ui,
+        ctx,
+        "Are you sure you want to delete all the developer directories?",
+        &mut show_developer_delete_confirm,
+        |confirm| {
+            println!("Closing window here");
+            let mut s = ui_state.borrow_mut();
+
+            if confirm {
+            }
+
+            s.show_developer_delete_confirm = false;
+        },
+    );
+
     // Drop our mutable reference to ui_state
     drop(s);
 
@@ -357,6 +376,8 @@ fn render_recs(ui: &mut Ui, ctx: &egui::Context, scan_results: &Scan, ui_state: 
         ui.label("These directories contain locally-synced installation files created while developing software. In most cases they can be safely deleted as they will be re-created when needed.");
         ui.label(format!("Detected {}", bytes_to_human(scan_results.dev_total_usage)));
         if ui.button("Delete all").clicked() {
+            let mut s = ui_state.borrow_mut();
+            s.show_developer_delete_confirm = true;
         }
     });
 }
@@ -423,6 +444,7 @@ impl App {
         options.initial_window_size = Some(Vec2::new(1024.0, 768.0));
         let ui_state = RefCell::new(UiState {
             show_delete_confirm: false,
+            show_developer_delete_confirm: false,
             show_settings: RefCell::new(false),
             file_to_delete: None,
             current_tab: CurrentTab::Summary,

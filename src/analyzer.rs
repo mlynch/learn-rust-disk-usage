@@ -104,6 +104,7 @@ impl<'a> Analyzer<'a> {
         (*w).largest_files = stats.largest_files.clone();
         (*w).completed_at = Some(Local::now());
         (*w).num_files = stats.num_files;
+        (*w).dev_total_usage = stats.dev_total_usage;
         (*w).total_archives = stats.total_archives;
         (*w).total_binaries = stats.total_binaries;
         (*w).total_documents = stats.total_documents;
