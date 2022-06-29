@@ -143,11 +143,11 @@ impl eframe::App for App {
                             completed_at.format("%a %b %e %T %Y"),
                             duration_str
                         ));
+                        ui.label(format!(
+                            "Total usage: {}",
+                            bytes_to_human(scan_results.total_bytes)
+                        ));
                     }
-                    ui.label(format!(
-                        "Total usage: {}",
-                        bytes_to_human(scan_results.total_bytes)
-                    ));
 
                     render_results(ui, ctx, scan_results, &self.ui_state); //&mut self.show_delete_confirm);
                 }
@@ -288,15 +288,23 @@ fn render_results(ui: &mut Ui, ctx: &egui::Context, state: &Scan, ui_state: &Ref
         },
     );
 
-    match s.current_tab {
+    // Drop our mutable reference to ui_state
+    drop(s);
+
+    let uis = ui_state.borrow();
+    match uis.current_tab {
         CurrentTab::LargeFiles => render_large_files(ui, ctx, state, ui_state),
         CurrentTab::Recs => render_recs(ui, ctx, state, ui_state),
         CurrentTab::Summary => render_summary(ui, ctx, state, ui_state),
     }
 }
 
-fn render_large_files(ui: &mut Ui, ctx: &egui::Context, state: &Scan, ui_state: &RefCell<UiState>) {
+fn render_large_files(ui: &mut Ui, _ctx: &egui::Context, state: &Scan, ui_state: &RefCell<UiState>) {
     ScrollArea::vertical().show(ui, |ui| {
+        if state.largest_files.len() == 0 {
+            let s = ui_state.borrow();
+            ui.label(format!("No large files detected (> {})", bytes_to_human(*s.setting_nlargest.borrow())));
+        }
         TableBuilder::new(ui)
             .striped(true)
             .cell_layout(egui::Layout::left_to_right().with_cross_align(egui::Align::Center))
