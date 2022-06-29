@@ -81,7 +81,7 @@ impl Scan {
 pub struct App {
     scan_results: Arc<RwLock<Scan>>,
     ui_state: RefCell<UiState>,
-    scanning: RefCell<bool>
+    scanning: Arc<RwLock<bool>>
 }
 
 impl eframe::App for App {
@@ -125,7 +125,9 @@ impl eframe::App for App {
                     ui.label(current_file.clone());
 
                     // Still scanning, so repaint
-                    // ctx.request_repaint();
+                    if *self.scanning.read() {
+                        ctx.request_repaint();
+                    }
                 } else {
                     if let Some(completed_at) = scan_results.completed_at {
                         ui.label(format!("Scanned {}", scan_results.dir));
@@ -193,14 +195,14 @@ fn render_scan_control(ui: &mut Ui, ctx: &egui::Context, app: &App, ui_state: &R
 
 
     if ui
-        .add_enabled(!*app.scanning.borrow(), scan_button)
+        .add_enabled(!*app.scanning.write(), scan_button)
         .clicked()
     {
         app.start_scan();
     }
     let stop_button = Button::new("Stop");
     if ui
-        .add_enabled(*app.scanning.borrow(), stop_button)
+        .add_enabled(*app.scanning.write(), stop_button)
         .clicked()
     {
         app.stop_scan();
@@ -441,7 +443,7 @@ impl App {
         let app = App {
             scan_results,
             ui_state,
-            scanning: RefCell::new(false)
+            scanning: Arc::new(RwLock::new(false))
         };
 
         eframe::run_native("Disk Usage", options, Box::new(|_cc| Box::new(app)));
@@ -449,15 +451,18 @@ impl App {
 
     fn start_scan(&self) {
         // self.scanning = RefCell::new(true);
-        let mut is_scanning = self.scanning.borrow_mut();
+        let mut is_scanning = self.scanning.write();
         *is_scanning = true;
+        // let mut is_scanning = self.scanning.borrow_mut();
+        //*is_scanning = true;
 
         let producer_lock = self.scan_results.clone();
-        let app_lock = self.scan_results.clone();
 
         let state = self.ui_state.borrow().clone();
 
-        let handle = thread::spawn(move || {
+        let scanning_arc = self.scanning.clone();
+
+        let _handle = thread::spawn(move || {
             // let _ = set_current_thread_priority(ThreadPriority::Min) as Result<(), _>;
             // let cloned_context = ctx.clone();
 
@@ -477,12 +482,14 @@ impl App {
             let analyzer = Analyzer::new(&settings, producer_lock);
 
             analyzer.analyze().expect("Unable to read file or directory");
-        });
 
+            let mut is_scanning = scanning_arc.write();
+            *is_scanning = false;
+        });
     }
 
     fn stop_scan(&self) {
-        let mut is_scanning = self.scanning.borrow_mut();
+        let mut is_scanning = self.scanning.write();
         *is_scanning = false;
     }
 }
