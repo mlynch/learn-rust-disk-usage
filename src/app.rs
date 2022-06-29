@@ -5,7 +5,7 @@ use std::{cell::RefCell, sync::Arc, thread};
 
 use chrono::{Local, DateTime};
 use dirs::home_dir;
-use egui::{Vec2, Frame, Context};
+use egui::{Vec2, Frame, Context, ProgressBar};
 use egui_extras::{Size, TableBuilder};
 
 use eframe::egui;
@@ -48,6 +48,7 @@ pub struct Scan {
     pub current_file: Option<String>,
     pub total_bytes: u64,
     pub largest_files: Box<Vec<LargeFile>>,
+    pub num_files: u64,
     pub total_music: u64,
     pub total_images: u64,
     pub total_videos: u64,
@@ -152,18 +153,6 @@ impl eframe::App for App {
                     render_results(ui, ctx, scan_results, &self.ui_state); //&mut self.show_delete_confirm);
                 }
             });
-
-            /*
-            ui.horizontal(|ui| {
-                ui.label("Your name: ");
-                ui.text_edit_singleline(&mut self.name);
-            });
-            ui.add(egui::Slider::new(&mut self.age, 0..=120).text("age"));
-            if ui.button("Click each year").clicked() {
-                self.age += 1;
-            }
-            ui.label(format!("Hello '{}', age {}", self.name, self.age));
-            */
         });
     }
 }
@@ -250,6 +239,10 @@ fn render_results(ui: &mut Ui, ctx: &egui::Context, state: &Scan, ui_state: &Ref
     let mut s = ui_state.borrow_mut();
 
     ui.horizontal(|ui| {
+        if ui.selectable_value(&mut s.current_tab, CurrentTab::Summary, "Summary").clicked() {
+            //let mut s = ui_state.borrow_mut();
+            s.current_tab = CurrentTab::Summary;
+        }
         if ui.selectable_value(&mut s.current_tab, CurrentTab::LargeFiles, "Large files").clicked() {
             //let mut s = ui_state.borrow_mut();
             s.current_tab = CurrentTab::LargeFiles;
@@ -258,10 +251,6 @@ fn render_results(ui: &mut Ui, ctx: &egui::Context, state: &Scan, ui_state: &Ref
             //let mut s = ui_state.borrow_mut();
             s.current_tab = CurrentTab::Recs;
         };
-        if ui.selectable_value(&mut s.current_tab, CurrentTab::Summary, "Summary").clicked() {
-            //let mut s = ui_state.borrow_mut();
-            s.current_tab = CurrentTab::Summary;
-        }
     });
 
     let mut show_confirm = s.show_delete_confirm.clone();
@@ -298,6 +287,24 @@ fn render_results(ui: &mut Ui, ctx: &egui::Context, state: &Scan, ui_state: &Ref
         CurrentTab::Summary => render_summary(ui, ctx, state, ui_state),
     }
 }
+
+fn render_summary(ui: &mut Ui, ctx: &egui::Context, scan_results: &Scan, ui_state: &RefCell<UiState>) {
+    ScrollArea::vertical().show(ui, |ui| {
+        let r = scan_results;
+
+        let make_bar = |v: u64, t: &str| -> ProgressBar {
+            ProgressBar::new((v as f32) / (r.total_bytes as f32)).text(t)
+        };
+
+        ui.label(format!("Scanned {} files", r.num_files));
+
+        ui.add(make_bar(r.total_images, "Images"));
+        ui.add(make_bar(r.total_videos, "Videos"));
+        ui.add(make_bar(r.total_documents, "Documents"));
+        ui.add(make_bar(r.total_documents, "Other"));
+    });
+}
+
 
 fn render_large_files(ui: &mut Ui, _ctx: &egui::Context, state: &Scan, ui_state: &RefCell<UiState>) {
     ScrollArea::vertical().show(ui, |ui| {
@@ -352,9 +359,6 @@ fn render_recs(ui: &mut Ui, ctx: &egui::Context, scan_results: &Scan, ui_state: 
         if ui.button("Delete all").clicked() {
         }
     });
-}
-
-fn render_summary(ui: &mut Ui, ctx: &egui::Context, scan_results: &Scan, ui_state: &RefCell<UiState>) {
 }
 
 fn render_settings(ui: &mut Ui, ctx: &egui::Context, scan_results: &Scan, ui_state: &RefCell<UiState>) {
@@ -421,7 +425,7 @@ impl App {
             show_delete_confirm: false,
             show_settings: RefCell::new(false),
             file_to_delete: None,
-            current_tab: CurrentTab::LargeFiles,
+            current_tab: CurrentTab::Summary,
             setting_developer_cache_dirs: RefCell::new(String::from("**/node_modules")),
             setting_ignore_glob: RefCell::new(String::from("")),
             setting_hidden: RefCell::new(true),
@@ -435,6 +439,7 @@ impl App {
             started_at: Local::now(),
             completed_at: None,
             current_file: None,
+            num_files: 0,
             total_bytes: 0,
             largest_files: Box::new(vec![]),
             total_music: 0,

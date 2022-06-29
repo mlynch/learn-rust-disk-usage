@@ -11,6 +11,7 @@ pub struct AnalyzerStats {
     developer_dir_pattern: Pattern,
     pub largest_files: Box<Vec<LargeFile>>,
     pub developer_dirs: Vec<LargeFile>,
+    pub num_files: u64,
     pub total_music: u64,
     pub total_images: u64,
     pub total_videos: u64,
@@ -28,6 +29,7 @@ impl AnalyzerStats {
             developer_dir_pattern: Pattern::new("**/node_modules").unwrap(),
             largest_files: Box::new(vec![]),
             developer_dirs: vec![],
+            num_files: 0,
             total_music: 0,
             total_images: 0,
             total_videos: 0,
@@ -54,6 +56,7 @@ impl AnalyzerStats {
 
     pub fn register_file(&mut self, path_str: &str, len: u64, nlargest: u64, large_bytes: u64) {
         // println!("{}", path_str);
+        self.num_files += 1;
 
         let mut mime_str = String::from("");
         if let Some(mime) = mime_guess::from_path(path_str).first() {
